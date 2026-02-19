@@ -1,48 +1,58 @@
-import { graphql } from '@/gql'
+import gql from 'graphql-tag'
 
-export const GET_MATCHING_ENTITIES = graphql(`
-  query getMatchingEntities($key: String!) {
-    carePointSubstringSearch(key: $key) {
-      id
-      name
-      description
-    }
-    communitySubstringSearch(key: $key) {
-      id
-      name
-      description
-      members {
-        photo
-      }
-    }
-    coreValueSubstringSearch(key: $key) {
-      description
-      id
-      name
-    }
-    peopleSubstringSearch(key: $key) {
-      id
-      name
-      photo
-    }
-    resourceSubstringSearch(key: $key) {
-      name
-      id
-      description
-      status
-      providedByPerson {
-        name
+/**
+ * Global search query across all entity types.
+ * Searches for people, contexts, pulses (goal/resource/story), and spaces (me/we).
+ *
+ * @param query - Search term (case-insensitive substring match)
+ * @returns SearchResults with up to 10 results of each entity type
+ */
+export const SEARCH_ALL = gql`
+  query SearchAll($query: String!) {
+    searchAll(query: $query) {
+      people {
         id
-        photo
+        firstName
+        lastName
+        email
       }
-    }
-    goalSubstringSearch(key: $key) {
-      id
-      photo
-      description
-      name
-      status
-      createdAt
+      contexts {
+        id
+        title
+      }
+      goalPulses {
+        id
+        title
+        content
+        createdAt
+        intensity
+      }
+      resourcePulses {
+        id
+        title
+        content
+        createdAt
+        intensity
+      }
+      storyPulses {
+        id
+        title
+        content
+        createdAt
+        intensity
+      }
+      meSpaces {
+        id
+        name
+        visibility
+        createdAt
+      }
+      weSpaces {
+        id
+        name
+        visibility
+        createdAt
+      }
     }
   }
-`)
+`

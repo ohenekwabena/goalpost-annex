@@ -7,7 +7,7 @@ import { jwtDecode } from 'jwt-decode'
 export const ERROR_POLICY = 'all'
 
 export const httpLink = new HttpLink({
-  uri: process.env.NEXT_PUBLIC_GRAPHQL_URI || '/graphql',
+  uri: process.env.NEXT_PUBLIC_GRAPHQL_URI || '/api/graphql',
 })
 
 export const retryLink = new RetryLink({
@@ -21,9 +21,19 @@ export const retryLink = new RetryLink({
   },
 })
 
-export const errorLink = onError(({ graphQLErrors, networkError }) => {
+export const errorLink = onError((error) => {
+  const { graphQLErrors, networkError } = error as {
+    // Apollo Client v4 consolidates error shapes; we only care about these two if present
+    graphQLErrors?: ReadonlyArray<{
+      message: string
+      locations?: unknown
+      path?: unknown
+    }>
+    networkError?: unknown
+  }
+
   if (graphQLErrors) {
-    graphQLErrors.map(({ message, locations, path }) => {
+    graphQLErrors.forEach(({ message, locations, path }) => {
       console.error(
         `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
       )
@@ -42,7 +52,7 @@ export const authLink = setContext(async (_, { headers }) => {
   try {
     const response = await fetch('/api/auth/access-token')
     let resJson = await response.json()
-    console.log('🚀 ~ apollo-functions.ts:45 ~ resJson:', resJson)
+    console.log('🚀 ~ apollo-functions.ts:55 ~ resJson:', resJson)
 
     if (!response.ok) {
       const error = {

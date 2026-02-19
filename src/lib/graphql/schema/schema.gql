@@ -1,0 +1,1062 @@
+# GoalPost GraphQL Schema - Unified Schema (Main + Reference Merged)
+# Designed for pulse-first, context-aware relational data modeling.
+#
+# Architecture:
+# - Pulses are the write path (first-class citizens)
+# - Resonance is the read/insight path (AI-generated meaning)
+# - Spaces define privacy boundaries (MeSpace/WeSpace)
+# - AI adds meaning after the fact (explainability layer)
+#
+# Migration Notes:
+# - Legacy Goals → GoalPulse (in FieldContext within MeSpace/WeSpace)
+# - Legacy Resources → ResourcePulse (in FieldContext within MeSpace/WeSpace)
+# - Legacy CoreValues & CarePoints → StoryPulse (properties merged as optional fields)
+# - Legacy Communities → WeSpaces (properties merged into Space interface)
+# - Direct relationships → ResonanceLinks (AI-discovered patterns within FieldContext)
+#
+# PULSE ACCESS PATTERN:
+# - Pulses are ONLY shown in FieldContexts
+# - User pulses → FieldContext in auto-created MeSpace ("{User's name} MeSpace")
+# - Community pulses → FieldContext in WeSpace ("{Community name} Field")
+# - Pulse-to-pulse relationships → ResonanceLinks within the same FieldContext
+#
+# MIGRATION EXAMPLE:
+# Person "Alice" with Goal "Launch App" → 
+#   1. Create MeSpace "Alice MeSpace"
+#   2. Create FieldContext "Alice's Goals" in MeSpace
+#   3. Create GoalPulse "Launch App" in FieldContext
+#   4. Related pulses get ResonanceLinks in same context
+
+extend schema @authentication
+
+# ============================================================================
+# ENUMS
+# ============================================================================
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum GoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum GoalHorizon {
+  SHORT
+  MID
+  LONG
+}
+
+enum SpaceRole {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum SpaceVisibility {
+  PRIVATE
+  SHARED
+}
+
+# ============================================================================
+# RELATIONSHIP PROPERTIES
+# ============================================================================
+
+"""
+Properties for person-to-person connections.
+Now represented via ResonanceLinks with these metadata properties.
+"""
+type ConnectedTo @relationshipProperties {
+  why: String
+  interests: String
+}
+
+
+
+# ============================================================================
+# CORE ACTORS (Who initiates pulses & owns spaces)
+# ============================================================================
+
+"""
+Base interface for Person entities.
+Defines common properties across Person and User types.
+"""
+interface PersonInterface {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  name: String!
+  photo: String
+  phone: String
+  email: String
+  pronouns: String
+  location: String
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
+"""
+A human user of the system.
+Multi-label: ["Person", "User"]
+Authorization: Can only view people who are owners or members of shared spaces.
+Merged properties from reference schema for backward compatibility.
+"""
+type Person implements PersonInterface
+  @node(labels: ["Person"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            OR: [
+              # Current user is the person themselves
+              { id_EQ: "$jwt.user.id" }
+              # Person owns a space where current user is owner
+              { ownsSpaces_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+              # Person owns a space where current user is a member
+              {
+                ownsSpaces_SOME: {
+                  members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                }
+              }
+              # Person is a member of a space where current user is also a member
+              {
+                memberOf_SOME: {
+                  space_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  isUser: Boolean
+    @cypher(
+      statement: """
+      MATCH (this) WHERE this:User
+      RETURN true AS isUser
+      """
+      columnName: "isUser"
+    )
+  
+  # Core identity properties
+  firstName: String!
+  lastName: String!
+  name: String! @customResolver(requires: "firstName lastName")
+  email: String
+  
+  # Profile properties (merged from reference)
+  photo: String
+  phone: String
+  pronouns: String
+  location: String
+  avatar: String
+  status: String
+  inviteSent: Boolean
+  
+  # Rich profile content
+  careManual: String
+  favorites: String
+  passions: String
+  traits: String
+  fieldsOfCare: String
+  interests: String
+  
+  # Onboarding (modern schema)
+  onboardingCurrentStepIndex: Int!
+  onboardingCompletedSteps: [String!]!
+  onboardingIsCompleted: Boolean!
+  onboardingSkipped: Boolean!
+  
+  # Timestamps
+  createdAt: DateTime!
+    @timestamp(operations: [CREATE])
+    @settable(onCreate: true, onUpdate: false)
+  updatedAt: DateTime
+    @timestamp(operations: [UPDATE])
+    @settable(onCreate: false, onUpdate: true)
+  
+  # Modern relationships (pulse-first architecture)
+  ownsSpaces: [Space!]! @relationship(type: "OWNS", direction: OUT)
+  memberOf: [SpaceMembership!]! @relationship(type: "IS_MEMBER", direction: OUT)
+  
+  # Legacy relationships (preserved for migration)
+  # NOTE: Person-to-person connections should migrate to ResonanceLinks
+  connections: [Person!]!
+    @relationship(
+      type: "CONNECTED_TO"
+      direction: OUT
+      queryDirection: UNDIRECTED
+      properties: "ConnectedTo"
+    )
+  
+  # PULSE ACCESS: Pulses are accessed through FieldContexts in owned/member Spaces
+  # To get a person's pulses:
+  #   1. Query ownsSpaces → get MeSpaces/WeSpaces
+  #   2. Query contexts on those spaces → get FieldContexts
+  #   3. Query pulses on those contexts → get GoalPulse/ResourcePulse/StoryPulse
+  # 
+  # MIGRATION: Legacy direct pulse relationships (goals, resources, coreValues, carePoints)
+  # are transformed into pulses within FieldContexts in the person's auto-created MeSpace.
+  
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+}
+
+"""
+User authentication and preferences.
+Extends Person with login and feature flags.
+Multi-label: ["Person", "User"]
+"""
+type User implements PersonInterface @node(labels: ["Person", "User"]) {
+  id: ID! @id
+  firstName: String!
+  lastName: String!
+  name: String! @customResolver(requires: "firstName lastName")
+  email: String
+  
+  # Profile properties
+  photo: String
+  phone: String
+  pronouns: String
+  location: String
+  avatar: String
+  status: String
+  
+  # Rich profile content
+  passions: String
+  traits: String
+  fieldsOfCare: String
+  interests: String
+  
+  # Authentication & preferences
+  aiEnabled: Boolean!
+  
+  # Onboarding
+  onboardingCurrentStepIndex: Int!
+  onboardingCompletedSteps: [String!]!
+  onboardingIsCompleted: Boolean!
+  onboardingSkipped: Boolean!
+  
+  # Timestamps
+  createdAt: DateTime!
+    @timestamp(operations: [CREATE])
+    @settable(onCreate: true, onUpdate: false)
+  updatedAt: DateTime
+    @timestamp(operations: [UPDATE])
+    @settable(onCreate: false, onUpdate: true)
+  
+  ownsSpaces: [Space!]! @relationship(type: "OWNS", direction: OUT)
+}
+
+"""
+Anything that can initiate pulses or own spaces.
+Query-time abstraction.
+
+MIGRATION NOTES:
+
+1. Community Transformation:
+   - Community nodes → WeSpace nodes with merged properties
+   - BELONGS_TO relationships → SpaceMembership nodes with appropriate roles
+   - Community owners → Space owners via OWNS relationship
+
+2. Pulse Creation Pattern:
+   - User pulses: Create FieldContext in auto-created MeSpace ("{User's name} MeSpace")
+   - Community pulses: Create FieldContext ("{Community name} Field") in WeSpace
+   - All pulses live ONLY within FieldContexts
+   - Pulse relationships → ResonanceLinks within the FieldContext
+
+3. Example Migration:
+   Person "Alice" MOTIVATED_BY Goal "Launch App" →
+     a. Create MeSpace "Alice MeSpace" (owner: Alice)
+     b. Create FieldContext "Alice's Goals" in MeSpace
+     c. Create GoalPulse "Launch App" in FieldContext
+     d. Alice can access via: ownsSpaces → contexts → pulses
+   
+   Community "Tech Team" MOTIVATED_BY Goal "Ship v2.0" →
+     a. Create WeSpace "Tech Team" with community properties
+     b. Create FieldContext "Tech Team Field" in WeSpace
+     c. Create GoalPulse "Ship v2.0" in FieldContext
+     d. Members can access via: memberOf → space → contexts → pulses
+"""
+union LifeSensor = Person
+
+# ============================================================================
+# SPACES (Privacy + Ownership Boundary)
+# ============================================================================
+
+"""
+Abstract space type.
+Never instantiated directly - use MeSpace or WeSpace.
+Expanded with Community properties from reference schema.
+"""
+interface Space {
+  id: ID!
+  name: String!
+  visibility: SpaceVisibility!
+  
+  # Merged community properties
+  description: String
+  why: String
+  location: String
+  time: String
+  activities: String
+  resultsAchieved: String
+  status: String
+  
+  createdAt: DateTime!
+  owner: [Person!]! @declareRelationship
+  members: [SpaceMembership!]! @declareRelationship
+  contexts: [FieldContext!]! @declareRelationship
+}
+
+"""
+A personal space owned by one person.
+Can be private (only owner) or shared with specific members.
+Multi-label: ["Space", "MeSpace"]
+Authorization: Only the owner can view, create, update, or delete a MeSpace.
+"""
+type MeSpace implements Space
+  @node(labels: ["Space", "MeSpace"])
+  @authorization(
+    filter: [{ where: { node: { owner_SOME: { id_EQ: "$jwt.user.id" } } } }]
+  ) {
+  id: ID! @id
+  name: String!
+  visibility: SpaceVisibility!
+  
+  # Community properties
+  description: String
+  why: String
+  location: String
+  time: String
+  activities: String
+  resultsAchieved: String
+  status: String
+  
+  createdAt: DateTime!
+  owner: [Person!]! @relationship(type: "OWNS", direction: IN)
+  members: [SpaceMembership!]! @relationship(type: "HAS_MEMBER", direction: OUT)
+  contexts: [FieldContext!]! @relationship(type: "HAS_CONTEXT", direction: OUT)
+}
+
+"""
+A collaborative space shared with other people.
+Has an owner and members who can all participate.
+Multi-label: ["Space", "WeSpace"]
+Authorization: Owner and members can access. Non-members cannot.
+"""
+type WeSpace implements Space
+  @node(labels: ["Space", "WeSpace"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            OR: [
+              { owner_SOME: { id_EQ: "$jwt.user.id" } }
+              { members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } } }
+            ]
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  name: String!
+  visibility: SpaceVisibility!
+  
+  # Community properties
+  description: String
+  why: String
+  location: String
+  time: String
+  activities: String
+  resultsAchieved: String
+  status: String
+  
+  createdAt: DateTime!
+  owner: [Person!]! @relationship(type: "OWNS", direction: IN)
+  members: [SpaceMembership!]! @relationship(type: "HAS_MEMBER", direction: OUT)
+  contexts: [FieldContext!]! @relationship(type: "HAS_CONTEXT", direction: OUT)
+}
+
+"""
+Represents a person as a member of a space with a specific role.
+Label: ["SpaceMembership"]
+"""
+type SpaceMembership @node(labels: ["SpaceMembership"]) {
+  id: ID! @id
+  role: SpaceRole!
+  addedAt: DateTime!
+  member: [Person!]! @relationship(type: "IS_MEMBER", direction: IN)
+  space: [Space!]! @relationship(type: "HAS_MEMBER", direction: IN)
+}
+
+# ============================================================================
+# FIELD CONTEXTS (Thematic/Temporal Containers)
+# ============================================================================
+
+"""
+A thematic or temporal container inside a Space.
+Groups related pulses together.
+Label: ["FieldContext"]
+
+MIGRATION PATTERN:
+- Each MeSpace gets at least one auto-created FieldContext for user's legacy pulses
+- Default naming: "{User's name} Goals", "{User's name} Resources", etc.
+- Each WeSpace (former Community) gets a FieldContext named "{Community name} Field"
+- All pulses from direct relationships are migrated INTO these contexts
+- ResonanceLinks represent relationships between pulses within the same context
+"""
+type FieldContext
+  @node(labels: ["FieldContext"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            OR: [
+              { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+              {
+                meSpace_SOME: {
+                  members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                }
+              }
+              { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+              {
+                weSpace_SOME: {
+                  members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!
+  emergentName: String
+  createdAt: DateTime!
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  pulses: [FieldPulse!]! @relationship(type: "HAS_PULSE", direction: OUT)
+  resonances: [ResonanceLink!]!
+    @relationship(type: "HAS_RESONANCE", direction: OUT)
+  resonancesInContext: [ResonanceLink!]!
+    @cypher(
+      statement: """
+      MATCH (this)-[:HAS_PULSE]->(pulse:FieldPulse)
+      WITH this, collect(pulse) as contextPulses
+      MATCH (source:FieldPulse)<-[:SOURCE]-(resonance:ResonanceLink)-[:TARGET]->(target:FieldPulse)
+      WHERE source IN contextPulses AND target IN contextPulses
+      RETURN DISTINCT resonance
+      """
+      columnName: "resonance"
+    )
+  meSpace: [MeSpace!]! @relationship(type: "HAS_CONTEXT", direction: IN)
+  weSpace: [WeSpace!]! @relationship(type: "HAS_CONTEXT", direction: IN)
+  space: [Space!]!
+    @cypher(
+      statement: """
+      MATCH (this)<-[:HAS_CONTEXT]-(space:Space)
+      RETURN space
+      """
+      columnName: "space"
+    )
+  owner: [Person!]!
+    @cypher(
+      statement: """
+      MATCH (this)<-[:HAS_CONTEXT]-(space:Space)-[:OWNS]->(owner:Person)
+      RETURN owner
+      """
+      columnName: "owner"
+    )
+}
+
+# ============================================================================
+# PULSES (First-Class Citizens - The Write Path)
+# ============================================================================
+
+"""
+Base pulse type.
+Represents a single contributed unit of meaning.
+Authorization: Only accessible by users with access to the parent FieldContext's Space.
+Never instantiate directly - use concrete types (GoalPulse, ResourcePulse, StoryPulse).
+"""
+interface FieldPulse {
+  id: ID!
+  title: String!
+  content: String!
+  createdAt: DateTime!
+  intensity: Float
+  createdBy: [Person!]! @declareRelationship
+  context: [FieldContext!]! @declareRelationship
+}
+
+"""
+A pulse that functions as a goal in its context.
+Multi-label: ["FieldPulse", "GoalPulse"]
+Merged properties from legacy Goal entity.
+"""
+type GoalPulse implements FieldPulse
+  @node(labels: ["FieldPulse", "GoalPulse"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            context_SOME: {
+              OR: [
+                { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  meSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+                { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  weSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!  # Mapped from legacy Goal.name
+  content: String!  # Mapped from legacy Goal.description
+  createdAt: DateTime!
+  intensity: Float
+  
+  # Modern goal properties
+  status: GoalStatus!
+  horizon: GoalHorizon
+  
+  # Merged legacy Goal properties
+  successMeasures: String
+  photo: String
+  activities: String
+  why: String
+  location: String
+  time: String
+  
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_PULSE", direction: IN)
+}
+
+"""
+A pulse that functions as a resource in its context.
+Multi-label: ["FieldPulse", "ResourcePulse"]
+Merged properties from legacy Resource entity.
+"""
+type ResourcePulse implements FieldPulse
+  @node(labels: ["FieldPulse", "ResourcePulse"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            context_SOME: {
+              OR: [
+                { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  meSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+                { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  weSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!  # Mapped from legacy Resource.name
+  content: String!  # Mapped from legacy Resource.description
+  createdAt: DateTime!
+  intensity: Float
+  
+  # Modern resource properties
+  resourceType: String!
+  availability: Float
+  
+  # Merged legacy Resource properties
+  status: String
+  why: String
+  location: String
+  time: String
+  
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_PULSE", direction: IN)
+}
+
+"""
+Narrative or reflective pulse.
+Multi-label: ["FieldPulse", "StoryPulse"]
+Merged properties from legacy CarePoint and CoreValue entities.
+All optional properties allow this type to represent stories, care points, or core values.
+"""
+type StoryPulse implements FieldPulse
+  @node(labels: ["FieldPulse", "StoryPulse"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            context_SOME: {
+              OR: [
+                { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  meSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+                { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  weSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!  # Mapped from legacy CarePoint.name or CoreValue.name
+  content: String!  # Mapped from legacy CarePoint.description or CoreValue.description
+  createdAt: DateTime!
+  intensity: Float
+  
+  # Merged legacy CarePoint properties (all optional)
+  status: String
+  why: String
+  location: String
+  time: String
+  levelFulfilled: String
+  fulfillmentDate: String
+  successMeasures: String
+  issuesIdentified: String
+  issuesResolved: String
+  
+  # Merged legacy CoreValue properties (all optional)
+  alignmentChallenges: String
+  alignmentExamples: String
+  
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_PULSE", direction: IN)
+}
+
+"""
+Care or wellness-focused pulse.
+Multi-label: ["FieldPulse", "CarePulse"]
+"""
+type CarePulse implements FieldPulse
+  @node(labels: ["FieldPulse", "CarePulse"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            context_SOME: {
+              OR: [
+                { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  meSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+                { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  weSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!
+  content: String!
+  createdAt: DateTime!
+  intensity: Float
+  sourceType: String
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_PULSE", direction: IN)
+}
+
+"""
+Core value or principle-focused pulse.
+Multi-label: ["FieldPulse", "CoreValuePulse"]
+"""
+type CoreValuePulse implements FieldPulse
+  @node(labels: ["FieldPulse", "CoreValuePulse"])
+  @authorization(
+    filter: [
+      {
+        where: {
+          node: {
+            context_SOME: {
+              OR: [
+                { meSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  meSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+                { weSpace_SOME: { owner_SOME: { id_EQ: "$jwt.user.id" } } }
+                {
+                  weSpace_SOME: {
+                    members_SOME: { member_SOME: { id_EQ: "$jwt.user.id" } }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  ) {
+  id: ID! @id
+  title: String!
+  content: String!
+  createdAt: DateTime!
+  intensity: Float
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_PULSE", direction: IN)
+}
+
+"""
+A discovered semantic resonance link between two pulses within the same FieldContext.
+Represents an AI-identified connection with confidence scoring.
+Scoped to a single FieldContext - only pulses in the same context can resonate.
+Multi-label: ["ResonanceLink"]
+
+MIGRATION PATTERN:
+- ResonanceLink.label should be set to the legacy relationship type name
+- Legacy relationship types to preserve as labels:
+  - MOTIVATED_BY (Person/Community → Goal)
+  - APPLIED_TO (Goal ← Resource)
+  - ALIGNED_TO (Goal → CoreValue)
+  - ENABLES (Goal → CarePoint)
+  - CARES_FOR (Goal ← CarePoint)
+  - DEPENDS_ON (CarePoint → Resource)
+  - EMBRACES (Person/Community → CoreValue)
+  - PROVIDES (Person/Community → Resource)
+  - HAS_ACCESS_TO (Community → Resource)
+  - CONNECTED_TO (Person → Person, with why/interests in evidence)
+
+Example:
+  Legacy: Goal "Launch App" -[:APPLIED_TO]-> Resource "Developer Time"
+  Migrated: GoalPulse "Launch App" <-[:SOURCE]- ResonanceLink {label: "APPLIED_TO"} -[:TARGET]-> ResourcePulse "Developer Time"
+"""
+type ResonanceLink @node(labels: ["ResonanceLink"]) {
+  id: ID! @id
+  label: String!
+  description: String
+  confidence: Float!
+  evidence: String
+  mergedFrom: String
+  createdAt: DateTime!
+  source: [FieldPulse!]! @relationship(type: "SOURCE", direction: OUT)
+  target: [FieldPulse!]! @relationship(type: "TARGET", direction: OUT)
+  context: [FieldContext!]! @relationship(type: "HAS_RESONANCE", direction: IN)
+}
+
+# ============================================================================
+# ACTIVITY LOG
+# ============================================================================
+
+"""
+Activity log for tracking changes and updates.
+Preserved from reference schema for audit trail.
+
+MIGRATION: Log entries reference pulses that now live in FieldContexts.
+Logs maintain direct relationships to pulses for historical tracking,
+but pulse discovery should go through Space → FieldContext → Pulse path.
+"""
+type Log @node(labels: ["Log"]) {
+  id: ID! @id
+  description: String!
+  createdAt: DateTime!
+    @timestamp(operations: [CREATE])
+    @settable(onCreate: true, onUpdate: false)
+  createdBy: [Person!]! @relationship(type: "CREATED_BY", direction: OUT)
+  
+  # Direct references to pulses (for audit trail)
+  # NOTE: These pulses exist in FieldContexts within Spaces
+  goals: [GoalPulse!]! @relationship(type: "LOGGED_FOR", direction: OUT)
+  resources: [ResourcePulse!]! @relationship(type: "LOGGED_FOR", direction: OUT)
+  pulses: [FieldPulse!]! @relationship(type: "LOGGED_FOR", direction: OUT)
+}
+
+# ============================================================================
+# SEARCH LAYER (Cross-Entity Discovery)
+# ============================================================================
+
+"""
+Structured response for categorized search results.
+Returns up to 10 results of each entity type matching the search query.
+"""
+type SearchResults {
+  people: [Person!]!
+  meSpaces: [MeSpace!]!
+  weSpaces: [WeSpace!]!
+  contexts: [FieldContext!]!
+  goalPulses: [GoalPulse!]!
+  resourcePulses: [ResourcePulse!]!
+  storyPulses: [StoryPulse!]!
+  carePulses: [CarePulse!]!
+  coreValuePulses: [CoreValuePulse!]!
+}
+
+# ============================================================================
+# MUTATIONS (Custom Operations)
+# ============================================================================
+
+"""
+Response from the chatbot containing the message and session ID.
+"""
+type ChatbotResponse {
+  message: String!
+  sessionId: String!
+}
+
+"""
+Response when adding a member to a space.
+"""
+type AddSpaceMemberResponse {
+  success: Boolean!
+  message: String!
+  membership: SpaceMembership
+}
+
+"""
+Response when updating a space member's role.
+"""
+type UpdateSpaceMemberRoleResponse {
+  success: Boolean!
+  message: String!
+  membership: SpaceMembership
+}
+
+"""
+Response when removing a member from a space.
+"""
+type RemoveSpaceMemberResponse {
+  success: Boolean!
+  message: String!
+}
+
+"""
+Response when updating user AI preferences.
+"""
+type UpdateUserAIResponse {
+  success: Boolean!
+  message: String!
+  user: User
+}
+
+type Mutation {
+  """
+  Send a message to the chatbot and receive a response.
+  """
+  sendMessageToChatbot(message: String!, sessionId: String): ChatbotResponse
+
+  """
+  Invite a person to join the platform.
+  Sends an invite email with a password reset link.
+  """
+  invitePerson(personId: String!): Person
+
+  """
+  Cancel an invitation for a person.
+  Removes the User label and invite-related properties.
+  """
+  cancelInvite(personId: String!): Person
+
+  """
+  Add a member to a space with a specific role.
+  Only the space owner or members with ADMIN role can add new members.
+  """
+  addSpaceMember(
+    spaceId: ID!
+    memberId: ID!
+    role: SpaceRole!
+  ): AddSpaceMemberResponse!
+
+  """
+  Update a space member's role.
+  Only the space owner or members with ADMIN role can change roles.
+  """
+  updateSpaceMemberRole(
+    spaceId: ID!
+    memberId: ID!
+    role: SpaceRole!
+  ): UpdateSpaceMemberRoleResponse!
+
+  """
+  Remove a member from a space.
+  Only the space owner or members with ADMIN role can remove members.
+  Cannot remove the space owner.
+  """
+  removeSpaceMember(spaceId: ID!, memberId: ID!): RemoveSpaceMemberResponse!
+
+  """
+  Update AI functionality preferences for a user.
+  Users can enable or disable AI features in the application.
+  """
+  updateUserAI(userId: ID!, aiEnabled: Boolean!): UpdateUserAIResponse!
+  
+  """
+  Generate embeddings for a person's profile.
+  Legacy mutation preserved for compatibility.
+  """
+  generatePersonEmbeddings(personId: ID!): Boolean!
+}
+
+# ============================================================================
+# QUERIES
+# ============================================================================
+
+type Query {
+  """
+  Global federated search across all entity types.
+  Searches using case-insensitive substring matching on:
+    - Pulses: content field
+    - People: firstName, lastName, email
+    - Contexts: title field
+    - Spaces (MeSpace/WeSpace): name field (filtered by user ownership/membership)
+
+  Space Filtering:
+    - Only returns spaces where the current user is the owner OR a member with any role (ADMIN, MEMBER, or GUEST)
+    - Private spaces not owned or joined by the user are excluded from results
+
+  Args:
+    - query: Search term (required, case-insensitive substring match)
+
+  Returns: SearchResults with up to 10 results of each entity type
+  """
+  searchAll(query: String!): SearchResults
+  
+  # ============================================================================
+  # LEGACY SUBSTRING QUERIES (Preserved for backward compatibility)
+  # ============================================================================
+  
+  """
+  Search for people by substring match on firstName or lastName.
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  peopleSubstringSearch(key: String!): [Person!]!
+    @cypher(
+      statement: """
+      MATCH (person:Person)
+      WHERE toLower(person.firstName) CONTAINS toLower($key) 
+        OR toLower(person.lastName) CONTAINS toLower($key)
+      RETURN person
+      """
+      columnName: "person"
+    )
+  
+  """
+  Search for goals by substring match on title or content.
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  goalSubstringSearch(key: String!): [GoalPulse!]!
+    @cypher(
+      statement: """
+      MATCH (goal:GoalPulse)
+      WHERE toLower(goal.title) CONTAINS toLower($key)
+        OR toLower(goal.content) CONTAINS toLower($key)
+      RETURN goal
+      """
+      columnName: "goal"
+    )
+  
+  """
+  Search for resources by substring match on title or content.
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  resourceSubstringSearch(key: String!): [ResourcePulse!]!
+    @cypher(
+      statement: """
+      MATCH (resource:ResourcePulse)
+      WHERE toLower(resource.title) CONTAINS toLower($key)
+        OR toLower(resource.content) CONTAINS toLower($key)
+      RETURN resource
+      """
+      columnName: "resource"
+    )
+  
+  """
+  Search for story pulses (including care points & core values) by substring match on title or content.
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  storyPulseSubstringSearch(key: String!): [StoryPulse!]!
+    @cypher(
+      statement: """
+      MATCH (story:StoryPulse)
+      WHERE toLower(story.title) CONTAINS toLower($key)
+        OR toLower(story.content) CONTAINS toLower($key)
+      RETURN story
+      """
+      columnName: "story"
+    )
+  
+  """
+  Search for care points (now StoryPulse, identified by having CarePoint-specific fields).
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  carePointSubstringSearch(key: String!): [StoryPulse!]!
+    @cypher(
+      statement: """
+      MATCH (carePoint:StoryPulse)
+      WHERE (carePoint.levelFulfilled IS NOT NULL OR carePoint.issuesIdentified IS NOT NULL)
+        AND (toLower(carePoint.title) CONTAINS toLower($key)
+          OR toLower(carePoint.content) CONTAINS toLower($key))
+      RETURN carePoint
+      """
+      columnName: "carePoint"
+    )
+  
+  """
+  Search for core values (now StoryPulse, identified by having CoreValue-specific fields).
+  LEGACY: Consider using searchAll for unified search experience.
+  """
+  coreValueSubstringSearch(key: String!): [StoryPulse!]!
+    @cypher(
+      statement: """
+      MATCH (coreValue:StoryPulse)
+      WHERE (coreValue.alignmentChallenges IS NOT NULL OR coreValue.alignmentExamples IS NOT NULL)
+        AND (toLower(coreValue.title) CONTAINS toLower($key)
+          OR toLower(coreValue.content) CONTAINS toLower($key))
+      RETURN coreValue
+      """
+      columnName: "coreValue"
+    )
+}

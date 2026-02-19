@@ -1,14 +1,14 @@
 'use client'
+
 import React, { useState } from 'react'
-import { Box, Button, Flex, Heading, Link, Text } from '@chakra-ui/react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
-import { Input } from '@/components/react-hook-form'
 
 function ForgotPasswordPage() {
   const {
-    control,
+    register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     setError: setFormError,
   } = useForm({
     defaultValues: { email: '' },
@@ -44,52 +44,146 @@ function ForgotPasswordPage() {
   }
 
   return (
-    <Flex minH="100vh" align="center" justify="center" bg={'gray.50'}>
-      <Box p={8} rounded="xl" boxShadow="lg" w="full" maxW="md">
-        <Heading as="h1" size="lg" textAlign="center" color="brand.600" mb={6}>
-          Forgot your password?
-        </Heading>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Box mb={6}>
-            <Input
-              label="Email address"
-              name="email"
-              type="email"
-              placeholder="you@email.com"
-              autoComplete="email"
-              control={control}
-              errors={errors}
-              required
-            />
-          </Box>
-          {error && (
-            <Text color="red.500" mb={4} textAlign="center">
-              {error}
-            </Text>
-          )}
-          {success && (
-            <Text color="green.500" mb={4} textAlign="center">
-              {success}
-            </Text>
-          )}
-          <Button
-            colorScheme="brand"
-            type="submit"
-            w="full"
-            mb={4}
-            loading={loading || isSubmitting}
+    <div
+      className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-gp-surface dark:bg-gp-surface-dark transition-colors"
+      style={{
+        backgroundImage: `
+        radial-gradient(at 18% 18%, color-mix(in srgb, var(--gp-primary) 12%, transparent) 0, transparent 55%),
+        radial-gradient(at 82% 16%, color-mix(in srgb, var(--gp-accent-glow) 12%, transparent) 0, transparent 55%),
+        radial-gradient(at 80% 85%, color-mix(in srgb, var(--gp-goal) 10%, transparent) 0, transparent 55%),
+        radial-gradient(at 16% 86%, color-mix(in srgb, var(--gp-resource) 12%, transparent) 0, transparent 55%)
+      `,
+      }}
+    >
+      <div
+        className="absolute inset-0 opacity-70 dark:opacity-90 pointer-events-none"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--gp-primary) 14%, transparent), transparent 75%)',
+        }}
+      />
+
+      {/* Main Content Container */}
+      <div className="relative w-full max-w-4xl flex flex-col items-center justify-center px-4">
+        {/* Floating Gradient Blobs */}
+        <div className="absolute -top-20 -left-20 w-64 h-64 bg-gp-primary/12 dark:bg-gp-primary/10 rounded-full blur-[100px]" />
+        <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-gp-accent-glow/12 dark:bg-gp-accent-glow/10 rounded-full blur-[100px]" />
+
+        {/* Organic Cloud Container */}
+        <div
+          className="w-full max-w-[500px] min-h-[500px] flex flex-col items-center justify-center p-12 relative z-10 transition-all duration-300 bg-gp-glass-bg backdrop-blur-[40px] border border-gp-glass-border shadow-[0_24px_60px_rgba(0,0,0,0.06)] dark:shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+          style={{
+            borderRadius: '60% 40% 70% 30% / 40% 50% 60% 50%',
+          }}
+        >
+          <div className="flex flex-col items-center w-full max-w-xs space-y-8">
+            {/* Header Section */}
+            <div className="text-center space-y-2">
+              <div className="size-12 bg-white/50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/80 dark:border-white/10 shadow-sm dark:shadow-lg">
+                <span className="material-symbols-outlined text-gp-primary text-2xl">
+                  lock_reset
+                </span>
+              </div>
+              <h1 className="text-3xl font-light text-gp-ink-strong dark:text-gp-ink-strong tracking-tight">
+                Reset Access
+              </h1>
+              <p className="text-gp-ink-muted dark:text-gp-ink-soft text-xs uppercase tracking-[0.2em] font-medium">
+                Recover Your Account
+              </p>
+            </div>
+
+            {/* Form */}
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="w-full space-y-4"
+            >
+              {/* Email Input */}
+              <div className="relative">
+                <input
+                  {...register('email', { required: 'Email is required' })}
+                  type="email"
+                  placeholder="Email"
+                  autoComplete="email"
+                  disabled={loading}
+                  className="w-full rounded-2xl px-5 py-3.5 text-gp-ink-strong dark:text-gp-ink-strong placeholder-gp-ink-soft/70 dark:placeholder-gp-ink-soft/70 focus:outline-none text-sm font-light transition-all duration-300 bg-white/55 backdrop-blur-[10px] border border-gp-glass-border dark:bg-white/[0.04] dark:border-white/10 focus:bg-white/85 focus:border-[color-mix(in_srgb,var(--gp-primary)_75%,transparent)] focus:shadow-[0_0_0_4px_color-mix(in_srgb,var(--gp-primary)_25%,transparent)] dark:focus:bg-white/10 dark:focus:border-[color-mix(in_srgb,var(--gp-primary)_80%,transparent)] dark:focus:shadow-[0_0_0_4px_color-mix(in_srgb,var(--gp-primary)_30%,transparent)]"
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-xs mt-1 ml-2">
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <p className="text-red-500 text-sm text-center font-medium">
+                  {error}
+                </p>
+              )}
+
+              {/* Success Message */}
+              {success && (
+                <p className="text-green-600 dark:text-green-400 text-sm text-center font-medium">
+                  {success}
+                </p>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="cursor-pointer w-full text-white rounded-2xl py-3.5 text-sm font-medium tracking-wide transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:disabled:translate-y-0 dark:hover:brightness-110"
+                style={{
+                  background:
+                    'linear-gradient(135deg, color-mix(in srgb, var(--gp-primary) 95%, white 5%), color-mix(in srgb, var(--gp-primary) 78%, black 22%))',
+                  boxShadow:
+                    '0 12px 32px color-mix(in srgb, var(--gp-primary) 48%, transparent)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow =
+                      '0 16px 42px color-mix(in srgb, var(--gp-primary) 55%, transparent)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow =
+                    '0 12px 32px color-mix(in srgb, var(--gp-primary) 48%, transparent)'
+                }}
+              >
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </form>
+
+            {/* Back to Login Link */}
+            <div className="text-center">
+              <Link
+                href="/auth/login"
+                className="text-[10px] text-slate-400 dark:text-white/40 hover:text-gp-primary dark:hover:text-gp-primary transition-colors uppercase tracking-widest font-semibold"
+              >
+                Back to Sign In
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Sign Up Link */}
+        <div className="mt-12 text-center z-20">
+          <Link
+            href="/auth/signup"
+            className="group flex flex-col items-center"
           >
-            Send Reset Link
-          </Button>
-        </form>
-        <Text textAlign="center" fontSize="sm" color="gray.500">
-          Remembered your password?{' '}
-          <Link href="/auth/login" color="brand.500" fontWeight="medium">
-            Sign in
+            <span className="text-slate-500 dark:text-white/60 text-sm font-light">
+              Don&apos;t have an account?
+            </span>
+            <span className="text-gp-primary dark:text-gp-primary font-medium text-sm mt-1 border-b border-gp-primary/20 group-hover:border-gp-primary transition-all">
+              Create one now
+            </span>
           </Link>
-        </Text>
-      </Box>
-    </Flex>
+        </div>
+      </div>
+    </div>
   )
 }
 

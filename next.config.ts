@@ -24,19 +24,46 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@assistant-ui/react', '@assistant-ui/react-ai-sdk'],
   poweredByHeader: false, // Hide X-Powered-By header
   reactStrictMode: true, // Enable React strict mode
   compress: true, // Enable gzip compression
   productionBrowserSourceMaps: false,
+  outputFileTracingIncludes: {
+    '/': ['./node_modules/lightningcss/**/*'],
+  },
   async headers() {
+    const corsOrigin =
+      process.env.CORS_ORIGIN ||
+      (process.env.NODE_ENV === 'development' ? '*' : 'http://localhost:3000')
+
     return [
+      // CORS headers for API routes
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: corsOrigin },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value:
+              'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, Apollo-Require-Preflight',
+          },
+        ],
+      },
+      // Security headers for all routes
       {
         source: '/(.*)',
         headers: securityHeaders,
       },
     ]
   },
-  webpack(config, { dev }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  webpack: (config: any, { dev }: any) => {
     config.experiments = { topLevelAwait: true, layers: true }
     // Add support for handling GraphQL files
     config.module.rules.push({
@@ -69,6 +96,12 @@ const nextConfig: NextConfig = {
       usedExports: true, // Tree-shake unused exports
     }
 
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      { module: /@apollo\/client/ },
+      { module: /@apollo\/experimental-nextjs-app-support/ },
+    ]
+
     return config
   },
   experimental: {
@@ -78,7 +111,6 @@ const nextConfig: NextConfig = {
       '@neo4j/graphql',
       'react',
       'apollo-server-micro',
-      '@chakra-ui/react',
     ],
     externalDir: true,
     serverSourceMaps: false,

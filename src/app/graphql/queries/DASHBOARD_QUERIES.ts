@@ -4,25 +4,26 @@ export const GET_LOGGED_IN_USER = graphql(`
   query getLoggedInUser($email: String!) {
     people(where: { email_EQ: $email }) {
       id
-      isUser
-      firstName
-      lastName
       name
       email
-      photo
-      createdAt
-      connections {
+      onboardingCurrentStepIndex
+      onboardingCompletedSteps
+      onboardingIsCompleted
+      onboardingSkipped
+      ownsSpaces {
         id
         name
-        photo
-      }
-      communities {
-        id
-        name
-        members {
+        visibility
+        createdAt
+        ... on MeSpace {
+          __typename
           id
           name
-          photo
+        }
+        ... on WeSpace {
+          __typename
+          id
+          name
         }
       }
     }

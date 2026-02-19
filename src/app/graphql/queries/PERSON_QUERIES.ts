@@ -6,82 +6,79 @@ export const GET_PERSON = graphql(`
       id
       firstName
       lastName
-      # isUser
       name
       email
-      photo
-      phone
-      pronouns
-      inviteSent
-
-      status
-      avatar
-      careManual
-      favorites
-      passions
       traits
+      passions
       fieldsOfCare
-      interests
-
-      providesResources {
+      ownsSpaces {
         id
         name
-        description
-        status
-      }
-      goals {
-        id
-        name
-        photo
-        status
+        visibility
         createdAt
-        description
       }
-      carePoints {
-        id
-        # name
-        description
-      }
-      coreValues {
-        id
-        name
-        description
-      }
-      location
-      createdAt
+    }
+  }
+`)
 
-      connectionsConnection {
-        edges {
-          node {
+export const GET_PERSON_PROFILE = graphql(`
+  query getPersonProfile($personId: ID!) {
+    people(where: { id_EQ: $personId }) {
+      id
+      firstName
+      lastName
+      name
+      email
+      traits
+      passions
+      fieldsOfCare
+      ownsSpaces {
+        ... on MeSpace {
+          id
+          name
+          visibility
+          createdAt
+          contexts {
             id
-            name
-            photo
+            title
+            pulses {
+              id
+              title
+              intensity
+            }
           }
-          properties {
-            why
-            interests
+        }
+        ... on WeSpace {
+          id
+          name
+          visibility
+          createdAt
+          contexts {
+            id
+            title
+            pulses {
+              id
+              title
+              intensity
+            }
           }
         }
       }
-
-      communitiesConnection {
-        edges {
-          node {
+      memberOf {
+        id
+        role
+        space {
+          ... on MeSpace {
             id
             name
-            description
-            members(limit: 3) {
-              id
-              photo
-            }
-            membersAggregate {
-              count
-            }
-            description
+            visibility
+            createdAt
           }
-          properties {
-            totem
-            signupDate
+          ... on WeSpace {
+            id
+            name
+            visibility
+            createdAt
           }
         }
       }
@@ -93,38 +90,15 @@ export const GET_ALL_PEOPLE = graphql(`
   query getAllPeople($where: PersonWhere) {
     people(where: $where) {
       id
-      firstName
-      lastName
       name
       email
-      photo
-      phone
-      pronouns
-      location
-      # createdAt
-      connections {
+      traits
+      passions
+      fieldsOfCare
+      ownsSpaces {
         id
         name
-      }
-      communities {
-        name
-        id
-      }
-      goals {
-        id
-        name
-      }
-      coreValues {
-        name
-        id
-      }
-      providesResources {
-        name
-        id
-      }
-      carePoints {
-        id
-        name
+        visibility
       }
     }
   }
@@ -135,17 +109,9 @@ export const GET_PEOPLE_AND_THEIR_GOALS = graphql(`
     people(where: $personWhere) {
       id
       name
-      photo
-      goals(limit: $goalLimit, sort: { createdAt: DESC }) {
+      ownsSpaces {
         id
         name
-        description
-        successMeasures
-        photo
-        status
-        location
-        time
-        createdAt
       }
     }
   }
@@ -153,20 +119,16 @@ export const GET_PEOPLE_AND_THEIR_GOALS = graphql(`
 
 export const GET_PEOPLE_AND_THEIR_RESOURCES = graphql(`
   query getPeopleAndTheirResources {
-    people(where: { providesResources_SOME: { NOT: { id_EQ: "" } } }) {
+    people {
       name
-      photo
       id
-      providesResources {
+      email
+      traits
+      passions
+      fieldsOfCare
+      ownsSpaces {
         name
         id
-        description
-        status
-        providedByPerson {
-          name
-          id
-          photo
-        }
       }
     }
   }
@@ -174,28 +136,30 @@ export const GET_PEOPLE_AND_THEIR_RESOURCES = graphql(`
 
 export const GET_PEOPLE_AND_THEIR_COREVALUES = graphql(`
   query getPeopleAndTheirCoreValues {
-    people(where: { coreValues_SOME: { NOT: { id_EQ: "" } } }) {
-      coreValues {
-        people {
-          id
-          name
-          photo
-        }
-        id
-        description
-        name
-      }
+    people {
       id
       name
-      photo
+      email
+      traits
+      passions
+      fieldsOfCare
+      ownsSpaces {
+        id
+        name
+      }
     }
   }
 `)
 
 export const GET_USER_BY_ID = graphql(`
   query getUserById($id: ID!) {
-    people(where: { id_EQ: $id, NOT: { isUser_EQ: false } }) {
+    people(where: { id_EQ: $id }) {
       id
+      name
+      email
+      traits
+      passions
+      fieldsOfCare
     }
   }
 `)

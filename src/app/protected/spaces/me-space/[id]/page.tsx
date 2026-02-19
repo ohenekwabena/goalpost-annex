@@ -1,0 +1,127 @@
+'use client'
+
+import { useRouter, useParams } from 'next/navigation'
+import { useQuery } from '@apollo/client/react'
+import { useEffect } from 'react'
+import { useCreateField } from '@/hooks'
+import { usePageContext } from '@/contexts'
+import { FieldsCanvas } from '@/components/layout/fields-canvas'
+import { GET_ME_SPACE_DETAILS_QUERY } from '@/app/graphql/queries'
+import type { FieldBubbleProps } from '@/components/ui/field-bubble'
+
+// Icon mapping for fields - can be customized per field
+const fieldIcons: Record<string, string> = {
+  default: 'psychology',
+  'deep-work': 'psychology',
+  growth: 'self_improvement',
+  community: 'hub',
+  inbox: 'inbox',
+  vitality: 'monitor_heart',
+}
+
+// Transform database field data to FieldBubble props
+function transformFieldsToProps(
+  //eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fields: any[]
+): Omit<FieldBubbleProps, 'position' | 'size' | 'shape' | 'animationType'>[] {
+  return fields.map((field) => ({
+    id: field.id,
+    icon:
+      fieldIcons[field.title.toLowerCase().replace(/\s+/g, '-')] ||
+      fieldIcons.default,
+    title: field.title,
+    description: field.emergentName || '',
+  }))
+}
+
+export default function MeSpaceFieldsPage() {
+  const router = useRouter()
+  const params = useParams()
+  const meSpaceId = params?.id as string
+  const { setPageTitle } = usePageContext()
+
+  const { createField, loading: isCreating } = useCreateField()
+
+  // Fetch MeSpace details and field contexts using GraphQL
+  const { data, loading, error, refetch } = useQuery(
+    GET_ME_SPACE_DETAILS_QUERY,
+    {
+      variables: { spaceId: meSpaceId },
+      skip: !meSpaceId,
+    }
+  )
+
+  const meSpace = data?.meSpaces?.[0]
+  const fields = meSpace?.contexts || []
+
+  // Set page title to the actual space name with field count
+  useEffect(() => {
+    if (meSpace?.name) {
+      const fieldCount = fields.length
+      setPageTitle(
+        `${meSpace.name} - ${fieldCount} Field${fieldCount !== 1 ? 's' : ''}`
+      )
+      localStorage.setItem(`space_${meSpaceId}`, meSpace.name)
+    }
+  }, [meSpace?.name, fields.length, meSpaceId, setPageTitle])
+
+  const handleFieldClick = (fieldId: string) => {
+    const field = fields.find((f) => f.id === fieldId)
+    if (field) {
+      setPageTitle(field.title)
+      // Persist field name in localStorage to avoid API call on page reload
+      localStorage.setItem(`field_${fieldId}`, field.title)
+    }
+    router.push(`/protected/spaces/me-space/${meSpaceId}/fields/${fieldId}`)
+  }
+
+  const handleCreateField = async (description: string, name?: string) => {
+    if (!meSpaceId) {
+      console.error('MeSpace ID not available')
+      return
+    }
+    try {
+      // Use name as the title, fallback to description if name not provided
+      const title = name || description
+      const createdField = await createField(
+        title,
+        meSpaceId,
+        'meSpace',
+        description
+      )
+
+      // Store the created field ID for onboarding navigation
+      if (createdField?.id) {
+        localStorage.setItem('lastCreatedFieldId', createdField.id)
+      }
+
+      await refetch()
+    } catch (err) {
+      console.error('Error creating field:', err)
+    }
+  }
+
+  const transformedFields = transformFieldsToProps(fields)
+
+  return (
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-gp-surface dark:bg-gp-surface-dark transition-colors">
+      {error && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-700 dark:text-red-400">
+            Error: {error.message}
+          </p>
+        </div>
+      )}
+      <FieldsCanvas
+        fields={transformedFields}
+        onFieldClick={handleFieldClick}
+        onCreateField={handleCreateField}
+        isCreating={isCreating}
+        isLoading={loading}
+        onRefetch={async () => {
+          await refetch()
+        }}
+      />
+    </div>
+  )
+}

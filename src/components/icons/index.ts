@@ -1,18 +1,20 @@
-export { default as LogoutIcon } from './LogoutIcon'
-export { default as ChatBotIcon } from './ChatBotIcon'
-export { default as CommunityIcon } from './CommunityIcon'
-export { default as SettingsIcon } from './SettingsIcon'
-export { default as InputIcon } from './InputIcon'
-export { default as CarePointsIcon } from './CarePointsIcon'
-export { default as CoreValuesIcon } from './CoreValuesIcon'
-export { default as GoalsIcon } from './GoalsIcon'
-export { default as SearchIcon } from './SearchIcon'
-export { default as HamburgerIcon } from './HamburgerIcon'
-export { default as HomeIcon } from './HomeIcon'
-export { default as PeopleIcon } from './PeopleIcon'
-export { default as GraphNodeIcon } from './GraphNodeIcon'
-export { default as GoalPostIcon } from './GoalPostIcon'
-export { default as CalenderIcon } from './CalenderIcon'
-export { default as EditIcon } from './EditIcon'
-export { default as DeleteIcon } from './DeleteIcon'
-export { default as EllipseIcon } from './EllipseIcon'
+export { GoalPostLogo } from './goalpost-logo'
+export type { GoalPostLogoProps } from './goalpost-logo'
+
+export { SunIcon } from './sun-icon'
+export type { SunIconProps } from './sun-icon'
+
+export { MoonIcon } from './moon-icon'
+export type { MoonIconProps } from './moon-icon'
+
+export { NotificationIcon } from './notification-icon'
+export type { NotificationIconProps } from './notification-icon'
+
+export { CloseIcon } from './close-icon'
+export type { CloseIconProps } from './close-icon'
+
+export { SpaIcon } from './spa-icon'
+export type { SpaIconProps } from './spa-icon'
+
+export { DiversityIcon } from './diversity-icon'
+export type { DiversityIconProps } from './diversity-icon'
